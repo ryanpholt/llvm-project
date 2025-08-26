@@ -53,6 +53,9 @@ private:
   void checkConstruct(SourceManager &SM, ASTContext *Ctx,
                       const CXXConstructExpr *Construct, const QualType *Type,
                       const CXXNewExpr *New);
+  void checkVarDeclConstruct(SourceManager &SM, ASTContext *Ctx,
+                             const CXXConstructExpr *Construct,
+                             const QualType *Type, const CXXNewExpr *New);
   void checkReset(SourceManager &SM, ASTContext *Ctx,
                   const CXXMemberCallExpr *Reset, const CXXNewExpr *New);
 

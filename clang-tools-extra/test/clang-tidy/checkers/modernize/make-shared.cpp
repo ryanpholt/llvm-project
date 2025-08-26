@@ -109,6 +109,8 @@ void basic() {
   }
 
   std::shared_ptr<int> R(new int());
+  // CHECK-MESSAGES: :[[@LINE-1]]:24: warning: use std::make_shared instead [modernize-make-shared]
+  // CHECK-FIXES: std::shared_ptr<int> R = std::make_shared<int>();
   std::shared_ptr<int> S(new int);
 
   // Create the shared_ptr as a parameter to a function.
@@ -266,6 +268,11 @@ void aliases() {
   // CHECK-MESSAGES: :[[@LINE-1]]:20: warning: use std::make_shared instead
   // CHECK-FIXES: IntPtr Typedef = std::make_shared<int>();
   IntPtr Typedef2 = IntPtr(new int);
+
+  IntPtr Typedef3(new int());
+  // CHECK-MESSAGES: :[[@LINE-1]]:10: warning: use std::make_shared instead
+  // CHECK-FIXES: IntPtr Typedef3 = std::make_shared<int>();
+  IntPtr Typedef4(new int);
 
   // We use 'bool' instead of '_Bool'.
   typedef std::shared_ptr<bool> BoolPtr;

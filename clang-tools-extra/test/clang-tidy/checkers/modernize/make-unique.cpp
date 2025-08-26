@@ -154,6 +154,8 @@ void basic() {
   }
 
   std::unique_ptr<int> R(new int());
+  // CHECK-MESSAGES: :[[@LINE-1]]:24: warning: use std::make_unique instead [modernize-make-unique]
+  // CHECK-FIXES: std::unique_ptr<int> R = std::make_unique<int>();
   std::unique_ptr<int> S(new int);
 
   // Create the unique_ptr as a parameter to a function.
@@ -493,6 +495,11 @@ void aliases() {
   // CHECK-MESSAGES: :[[@LINE-1]]:20: warning: use std::make_unique instead
   // CHECK-FIXES: IntPtr Typedef = std::make_unique<int>();
   IntPtr Typedef2 = IntPtr(new int);
+
+  IntPtr Typedef3(new int());
+  // CHECK-MESSAGES: :[[@LINE-1]]:10: warning: use std::make_unique instead
+  // CHECK-FIXES: IntPtr Typedef3 = std::make_unique<int>();
+  IntPtr Typedef4(new int);
 
   // We use 'bool' instead of '_Bool'.
   typedef std::unique_ptr<bool> BoolPtr;

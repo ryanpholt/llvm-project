@@ -17,6 +17,7 @@ using namespace clang::ast_matchers;
 namespace clang::tidy::modernize {
 
 static constexpr char ConstructorCall[] = "constructorCall";
+static constexpr char VarDeclConstructorCall[] = "varDeclConstructorCall";
 static constexpr char ResetCall[] = "resetCall";
 static constexpr char NewExpression[] = "newExpression";
 
@@ -77,19 +78,23 @@ void MakeSmartPtrCheck::registerMatchers(ast_matchers::MatchFinder *Finder) {
 
   auto IsPlacement = hasAnyPlacementArg(anything());
 
+  auto CtorCall = cxxConstructExpr(
+      hasType(getSmartPointerTypeMatcher()), argumentCountIs(1),
+      hasArgument(0, cxxNewExpr(hasType(pointsTo(qualType(hasCanonicalType(
+                                    equalsBoundNode(PointerType))))),
+                                CanCallCtor, unless(IsPlacement))
+                         .bind(NewExpression)),
+      unless(isInTemplateInstantiation()));
+
   Finder->addMatcher(
-      traverse(
-          TK_AsIs,
-          cxxBindTemporaryExpr(has(ignoringParenImpCasts(
-              cxxConstructExpr(
-                  hasType(getSmartPointerTypeMatcher()), argumentCountIs(1),
-                  hasArgument(
-                      0, cxxNewExpr(hasType(pointsTo(qualType(hasCanonicalType(
-                                        equalsBoundNode(PointerType))))),
-                                    CanCallCtor, unless(IsPlacement))
-                             .bind(NewExpression)),
-                  unless(isInTemplateInstantiation()))
-                  .bind(ConstructorCall))))),
+      traverse(TK_AsIs, cxxBindTemporaryExpr(has(ignoringParenImpCasts(
+                            CtorCall.bind(ConstructorCall))))),
+      this);
+
+  Finder->addMatcher(
+      traverse(TK_AsIs,
+               varDecl(hasType(getSmartPointerTypeMatcher().bind(PointerType)),
+                       hasInitializer(CtorCall.bind(VarDeclConstructorCall)))),
       this);
 
   Finder->addMatcher(
@@ -116,6 +121,8 @@ void MakeSmartPtrCheck::check(const MatchFinder::MatchResult &Result) {
   SourceManager &SM = *Result.SourceManager;
   const auto *Construct =
       Result.Nodes.getNodeAs<CXXConstructExpr>(ConstructorCall);
+  const auto *VarDeclConstruct =
+      Result.Nodes.getNodeAs<CXXConstructExpr>(VarDeclConstructorCall);
   const auto *Reset = Result.Nodes.getNodeAs<CXXMemberCallExpr>(ResetCall);
   const auto *Type = Result.Nodes.getNodeAs<QualType>(PointerType);
   const auto *New = Result.Nodes.getNodeAs<CXXNewExpr>(NewExpression);
@@ -139,6 +146,8 @@ void MakeSmartPtrCheck::check(const MatchFinder::MatchResult &Result) {
     return;
   if (Construct)
     checkConstruct(SM, Result.Context, Construct, Type, New);
+  else if (VarDeclConstruct)
+    checkVarDeclConstruct(SM, Result.Context, VarDeclConstruct, Type, New);
   else if (Reset)
     checkReset(SM, Result.Context, Reset, New);
 }
@@ -150,6 +159,7 @@ void MakeSmartPtrCheck::checkConstruct(SourceManager &SM, ASTContext *Ctx,
   SourceLocation ConstructCallStart = Construct->getExprLoc();
   bool InMacro = ConstructCallStart.isMacroID();
 
+  // Disable the fix in macros.
   if (InMacro && IgnoreMacros) {
     return;
   }
@@ -204,6 +214,50 @@ void MakeSmartPtrCheck::checkConstruct(SourceManager &SM, ASTContext *Ctx,
                                       BraceRange.getEnd().getLocWithOffset(1)),
         ")");
   }
+
+  insertHeader(Diag, SM.getFileID(ConstructCallStart));
+}
+
+void MakeSmartPtrCheck::checkVarDeclConstruct(SourceManager &SM,
+                                              ASTContext *Ctx,
+                                              const CXXConstructExpr *Construct,
+                                              const QualType *Type,
+                                              const CXXNewExpr *New) {
+  SourceLocation ConstructCallStart = Construct->getExprLoc();
+  bool InMacro = ConstructCallStart.isMacroID();
+
+  // Disable the fix in macros.
+  if (InMacro && IgnoreMacros) {
+    return;
+  }
+
+  auto Diag = diag(ConstructCallStart, "use %0 instead")
+              << MakeSmartPtrFunctionName;
+
+  // Disable the fix in macros.
+  if (InMacro) {
+    return;
+  }
+
+  if (!replaceNew(Diag, New, SM, Ctx)) {
+    return;
+  }
+
+  SourceRange ConstructRange = Construct->getParenOrBraceRange();
+
+  // Replace the opening parenthesis with " = "
+  Diag << FixItHint::CreateReplacement(
+      CharSourceRange::getCharRange(
+          ConstructRange.getBegin(),
+          ConstructRange.getBegin().getLocWithOffset(1)),
+      " = ");
+
+  // Replace the constructor call with the make_unique call
+  SourceLocation NewStart = New->getBeginLoc();
+  Diag << FixItHint::CreateInsertion(
+      NewStart, (MakeSmartPtrFunctionName + "<" +
+                 getNewExprName(New, SM, getLangOpts()) + ">(")
+                    .str());
 
   insertHeader(Diag, SM.getFileID(ConstructCallStart));
 }
