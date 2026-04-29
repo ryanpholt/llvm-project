@@ -81,6 +81,8 @@ public:
 
   void SetExceptionBreakpoints() override;
 
+  void SetExceptionBreakpoints(lldb::tid_t tid) override;
+
   void ClearExceptionBreakpoints() override;
 
   bool ExceptionBreakpointsAreSet() override;

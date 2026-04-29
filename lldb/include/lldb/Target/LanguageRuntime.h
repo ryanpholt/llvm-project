@@ -138,6 +138,15 @@ public:
 
   virtual void SetExceptionBreakpoints() {}
 
+  /// Set exception breakpoints, restricting them to only fire for the
+  /// specified thread. This prevents background threads throwing caught
+  /// C++ exceptions from interrupting expression evaluation.
+  /// Subclasses that don't override this will fall back to the unfiltered
+  /// SetExceptionBreakpoints().
+  virtual void SetExceptionBreakpoints(lldb::tid_t /*tid*/) {
+    SetExceptionBreakpoints();
+  }
+
   virtual void ClearExceptionBreakpoints() {}
 
   virtual bool ExceptionBreakpointsAreSet() { return false; }

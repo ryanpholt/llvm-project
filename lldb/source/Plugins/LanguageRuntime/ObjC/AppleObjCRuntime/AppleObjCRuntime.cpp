@@ -249,7 +249,7 @@ Address *AppleObjCRuntime::GetPrintForDebuggerAddr() {
     SymbolContext context;
 
     modules.FindSymbolsWithNameAndType(ConstString("_NSPrintForDebugger"),
-                                        eSymbolTypeCode, contexts);
+                                       eSymbolTypeCode, contexts);
     if (contexts.IsEmpty()) {
       modules.FindSymbolsWithNameAndType(ConstString("_CFPrintForDebugger"),
                                          eSymbolTypeCode, contexts);
@@ -415,6 +415,10 @@ AppleObjCRuntime::GetObjCVersion(Process *process, ModuleSP &objc_module_sp) {
 }
 
 void AppleObjCRuntime::SetExceptionBreakpoints() {
+  SetExceptionBreakpoints(LLDB_INVALID_THREAD_ID);
+}
+
+void AppleObjCRuntime::SetExceptionBreakpoints(lldb::tid_t tid) {
   const bool catch_bp = false;
   const bool throw_bp = true;
   const bool is_internal = true;
@@ -423,10 +427,13 @@ void AppleObjCRuntime::SetExceptionBreakpoints() {
     m_objc_exception_bp_sp = LanguageRuntime::CreateExceptionBreakpoint(
         m_process->GetTarget(), GetLanguageType(), catch_bp, throw_bp,
         is_internal);
-    if (m_objc_exception_bp_sp)
-      m_objc_exception_bp_sp->SetBreakpointKind("ObjC exception");
+    if (!m_objc_exception_bp_sp)
+      return;
+    m_objc_exception_bp_sp->SetBreakpointKind("ObjC exception");
   } else
     m_objc_exception_bp_sp->SetEnabled(true);
+
+  m_objc_exception_bp_sp->SetThreadID(tid);
 }
 
 void AppleObjCRuntime::ClearExceptionBreakpoints() {
@@ -486,15 +493,18 @@ lldb::SearchFilterSP AppleObjCRuntime::CreateExceptionSearchFilter() {
   return target.GetSearchFilterForModuleList(&filter_modules);
 }
 
-ValueObjectSP AppleObjCRuntime::GetExceptionObjectForThread(
-    ThreadSP thread_sp) {
+ValueObjectSP
+AppleObjCRuntime::GetExceptionObjectForThread(ThreadSP thread_sp) {
   auto *cpp_runtime = m_process->GetLanguageRuntime(eLanguageTypeC_plus_plus);
-  if (!cpp_runtime) return ValueObjectSP();
+  if (!cpp_runtime)
+    return ValueObjectSP();
   auto cpp_exception = cpp_runtime->GetExceptionObjectForThread(thread_sp);
-  if (!cpp_exception) return ValueObjectSP();
+  if (!cpp_exception)
+    return ValueObjectSP();
 
   auto descriptor = GetClassDescriptor(*cpp_exception);
-  if (!descriptor || !descriptor->IsValid()) return ValueObjectSP();
+  if (!descriptor || !descriptor->IsValid())
+    return ValueObjectSP();
 
   while (descriptor) {
     ConstString class_name(descriptor->GetClassName());
@@ -553,7 +563,8 @@ ThreadSP AppleObjCRuntime::GetBacktraceThreadFromException(
     data.SetAddressByteSize(dict_entry->GetProcessSP()->GetAddressByteSize());
     Status error;
     dict_entry->GetData(data, error);
-    if (error.Fail()) return ThreadSP();
+    if (error.Fail())
+      return ThreadSP();
 
     lldb::offset_t data_offset = 0;
     auto dict_entry_key = data.GetAddress(&data_offset);
@@ -606,8 +617,8 @@ ThreadSP AppleObjCRuntime::GetBacktraceThreadFromException(
 
 std::tuple<FileSpec, ConstString>
 AppleObjCRuntime::GetExceptionThrowLocation() {
-  return std::make_tuple(
-      FileSpec("libobjc.A.dylib"), ConstString("objc_exception_throw"));
+  return std::make_tuple(FileSpec("libobjc.A.dylib"),
+                         ConstString("objc_exception_throw"));
 }
 
 void AppleObjCRuntime::ReadObjCLibraryIfNeeded(const ModuleList &module_list) {

@@ -635,6 +635,10 @@ lldb::BreakpointSP CPPLanguageRuntime::CreateExceptionBreakpoint(
 }
 
 void CPPLanguageRuntime::SetExceptionBreakpoints() {
+  SetExceptionBreakpoints(LLDB_INVALID_THREAD_ID);
+}
+
+void CPPLanguageRuntime::SetExceptionBreakpoints(lldb::tid_t tid) {
   if (!m_process)
     return;
 
@@ -651,9 +655,12 @@ void CPPLanguageRuntime::SetExceptionBreakpoints() {
   } else {
     m_cxx_exception_bp_sp = CreateExceptionBreakpoint(
         catch_bp, throw_bp, for_expressions, is_internal);
-    if (m_cxx_exception_bp_sp)
-      m_cxx_exception_bp_sp->SetBreakpointKind("c++ exception");
+    if (!m_cxx_exception_bp_sp)
+      return;
+    m_cxx_exception_bp_sp->SetBreakpointKind("c++ exception");
   }
+
+  m_cxx_exception_bp_sp->SetThreadID(tid);
 }
 
 void CPPLanguageRuntime::ClearExceptionBreakpoints() {

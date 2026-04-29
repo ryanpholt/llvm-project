@@ -418,15 +418,20 @@ void ThreadPlanCallFunction::SetBreakpoints() {
         m_process.GetLanguageRuntime(eLanguageTypeC_plus_plus);
     m_objc_language_runtime = m_process.GetLanguageRuntime(eLanguageTypeObjC);
 
+    // Restrict exception breakpoints to the expression thread so that
+    // background threads throwing caught C++ exceptions don't interrupt
+    // expression evaluation.
+    lldb::tid_t tid = GetThread().GetID();
+
     if (m_cxx_language_runtime) {
       m_should_clear_cxx_exception_bp =
           !m_cxx_language_runtime->ExceptionBreakpointsAreSet();
-      m_cxx_language_runtime->SetExceptionBreakpoints();
+      m_cxx_language_runtime->SetExceptionBreakpoints(tid);
     }
     if (m_objc_language_runtime) {
       m_should_clear_objc_exception_bp =
           !m_objc_language_runtime->ExceptionBreakpointsAreSet();
-      m_objc_language_runtime->SetExceptionBreakpoints();
+      m_objc_language_runtime->SetExceptionBreakpoints(tid);
     }
   }
 }
